@@ -41,16 +41,11 @@ export default function ServiceDetailScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* TODO: ao clicar, navegar para ScheduleScreen (a implementar) */}
         <Button
           title="Solicitar Orçamento"
-          onPress={() => {}}
-          disabled
+          onPress={() => navigation.navigate('ScheduleScreen', { service })}
           style={styles.button}
         />
-        <Text style={styles.comingSoon}>
-          * Agendamento disponível em breve
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -130,9 +125,4 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   button: { marginBottom: 12 },
-  comingSoon: {
-    fontSize: 12,
-    color: Colors.textLight,
-    textAlign: 'center',
-  },
 });

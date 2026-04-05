@@ -3,51 +3,86 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AuthContext = createContext(null);
 
-const STORAGE_KEY = '@jardinagem_weber:user';
+// Guarda todos os usuários cadastrados (inclui senha)
+const USERS_KEY = '@jardinagem_weber:users';
+// Guarda apenas o e-mail do usuário logado atualmente
+const SESSION_KEY = '@jardinagem_weber:session';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadStoredUser();
+    restoreSession();
   }, []);
 
-  async function loadStoredUser() {
+  async function restoreSession() {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setUser(JSON.parse(stored));
+      const sessionEmail = await AsyncStorage.getItem(SESSION_KEY);
+      if (sessionEmail === 'admin@jardinagem.com') {
+        setUser({ id: 'admin', name: 'Admin Weber', email: sessionEmail, isAdmin: true });
+        return;
       }
-    } catch (e) {
-      // storage error — ignore, user stays null
-    } finally {
+      if (sessionEmail) {
+        const usersRaw = await AsyncStorage.getItem(USERS_KEY);
+        const users = usersRaw ? JSON.parse(usersRaw) : [];
+        const found = users.find((u) => u.email === sessionEmail);
+        if (found) {
+          const { password: _, ...safeUser } = found;
+          setUser(safeUser);
+        }
+      }
+    } catch {}
+    finally {
       setLoading(false);
     }
   }
 
   async function register({ name, email, phone, password }) {
-    // TODO: substituir por chamada real à API
-    const newUser = { id: Date.now().toString(), name, email, phone };
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
-    setUser(newUser);
+    const usersRaw = await AsyncStorage.getItem(USERS_KEY);
+    const users = usersRaw ? JSON.parse(usersRaw) : [];
+
+    if (users.find((u) => u.email === email)) {
+      throw new Error('Este e-mail já está cadastrado.');
+    }
+
+    const newUser = { id: Date.now().toString(), name, email, phone, password };
+    const updated = [...users, newUser];
+    await AsyncStorage.setItem(USERS_KEY, JSON.stringify(updated));
+    await AsyncStorage.setItem(SESSION_KEY, email);
+
+    const { password: _, ...safeUser } = newUser;
+    setUser(safeUser);
   }
 
   async function login({ email, password }) {
-    // TODO: substituir por chamada real à API com validação
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!stored) {
+    // Login do administrador
+    if (email === 'admin@jardinagem.com' && password === 'admin123') {
+      const adminUser = { id: 'admin', name: 'Admin Weber', email, isAdmin: true };
+      await AsyncStorage.setItem(SESSION_KEY, email);
+      setUser(adminUser);
+      return;
+    }
+
+    // Login do cliente
+    const usersRaw = await AsyncStorage.getItem(USERS_KEY);
+    const users = usersRaw ? JSON.parse(usersRaw) : [];
+    const found = users.find((u) => u.email === email);
+
+    if (!found) {
       throw new Error('Usuário não encontrado. Faça o cadastro primeiro.');
     }
-    const savedUser = JSON.parse(stored);
-    if (savedUser.email !== email) {
+    if (found.password !== password) {
       throw new Error('E-mail ou senha inválidos.');
     }
-    setUser(savedUser);
+
+    await AsyncStorage.setItem(SESSION_KEY, email);
+    const { password: _, ...safeUser } = found;
+    setUser(safeUser);
   }
 
   async function logout() {
-    await AsyncStorage.removeItem(STORAGE_KEY);
+    await AsyncStorage.removeItem(SESSION_KEY);
     setUser(null);
   }
 

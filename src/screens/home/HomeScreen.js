@@ -48,6 +48,15 @@ export default function HomeScreen({ navigation }) {
         <Text style={styles.bannerSub}>Solicite um orçamento agora mesmo</Text>
       </View>
 
+      <TouchableOpacity
+        style={styles.myRequestsBtn}
+        onPress={() => navigation.navigate('MyRequestsScreen')}
+      >
+        <Text style={styles.myRequestsIcon}>📋</Text>
+        <Text style={styles.myRequestsText}>Minhas Solicitações</Text>
+        <Text style={styles.myRequestsArrow}>›</Text>
+      </TouchableOpacity>
+
       <Text style={styles.sectionTitle}>Nossos Serviços</Text>
 
       <FlatList
@@ -106,6 +115,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 4,
   },
+  myRequestsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  myRequestsIcon: { fontSize: 20, marginRight: 10 },
+  myRequestsText: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.textDark },
+  myRequestsArrow: { fontSize: 22, color: Colors.textLight },
   list: { paddingHorizontal: 12, paddingBottom: 24 },
   row: { justifyContent: 'space-between' },
   card: {
