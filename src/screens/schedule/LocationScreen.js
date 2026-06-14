@@ -115,7 +115,7 @@ export default function LocationScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: 24, paddingBottom: 40 },
+  scroll: { width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: 24, paddingBottom: 40 },
   backButton: { paddingTop: 16, paddingBottom: 8 },
   backText: { color: Colors.primary, fontSize: 15, fontWeight: '500' },
   title: { fontSize: 24, fontWeight: '700', color: Colors.textDark, marginBottom: 4, marginTop: 8 },

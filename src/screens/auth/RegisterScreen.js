@@ -33,7 +33,10 @@ export default function RegisterScreen({ navigation }) {
     if (!form.phone.trim()) newErrors.phone = 'Informe o telefone';
     else if (form.phone.replace(/\D/g, '').length < 10) newErrors.phone = 'Telefone inválido';
     if (!form.password) newErrors.password = 'Informe a senha';
-    else if (form.password.length < 6) newErrors.password = 'Mínimo de 6 caracteres';
+    else if (form.password.length < 8) newErrors.password = 'Mínimo de 8 caracteres';
+    else if (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
+      newErrors.password = 'Use letras e números';
+    }
     if (form.confirm !== form.password) newErrors.confirm = 'As senhas não coincidem';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -102,7 +105,7 @@ export default function RegisterScreen({ navigation }) {
               label="Senha"
               value={form.password}
               onChangeText={v => update('password', v)}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres, com letras e números"
               secureTextEntry
               error={errors.password}
             />

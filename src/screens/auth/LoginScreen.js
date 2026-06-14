@@ -21,6 +21,7 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [loginError, setLoginError] = useState('');
 
   function validate() {
     const newErrors = {};
@@ -33,11 +34,14 @@ export default function LoginScreen({ navigation }) {
 
   async function handleLogin() {
     if (!validate()) return;
+    setLoginError('');
     setLoading(true);
     try {
       await login({ email: email.trim(), password });
     } catch (err) {
-      Alert.alert('Erro ao entrar', err.message);
+      const message = err.message || 'Usuário ou senha inválidos.';
+      setLoginError(message);
+      Alert.alert('Não foi possível entrar', message);
     } finally {
       setLoading(false);
     }
@@ -62,7 +66,10 @@ export default function LoginScreen({ navigation }) {
             <Input
               label="E-mail"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(value) => {
+                setEmail(value);
+                setLoginError('');
+              }}
               placeholder="seuemail@exemplo.com"
               keyboardType="email-address"
               error={errors.email}
@@ -71,11 +78,23 @@ export default function LoginScreen({ navigation }) {
             <Input
               label="Senha"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(value) => {
+                setPassword(value);
+                setLoginError('');
+              }}
               placeholder="Sua senha"
               secureTextEntry
               error={errors.password}
             />
+
+            {loginError ? <Text style={styles.loginError}>{loginError}</Text> : null}
+
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ForgotPassword')}
+              style={styles.forgotButton}
+            >
+              <Text style={styles.registerLink}>Esqueci minha senha</Text>
+            </TouchableOpacity>
 
             <Button
               title="Entrar"
@@ -148,6 +167,14 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     marginTop: 8,
+  },
+  forgotButton: { alignSelf: 'flex-end', marginTop: -6, marginBottom: 10 },
+  loginError: {
+    color: Colors.error,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: -4,
+    marginBottom: 12,
   },
   registerRow: {
     flexDirection: 'row',

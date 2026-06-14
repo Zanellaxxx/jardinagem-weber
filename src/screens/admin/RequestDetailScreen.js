@@ -1,237 +1,127 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  Image,
-} from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '../../components/Button';
+import StatusBadge from '../../components/StatusBadge';
 import Colors from '../../constants/colors';
+import { getPaymentMethodLabel, PAYMENT_STATUS_LABELS } from '../../constants/payment';
+import { REQUEST_STATUS } from '../../constants/requestStatus';
 import { useRequests } from '../../context/RequestsContext';
 
-const STATUS_CONFIG = {
-  pending: { label: 'Aguardando resposta', color: '#F9A825', bg: '#FFF8E1' },
-  quoted: { label: 'Orçamento enviado', color: '#1565C0', bg: '#E3F2FD' },
-  confirmed: { label: 'Confirmado', color: Colors.success, bg: '#E8F5E9' },
-  rejected: { label: 'Recusado', color: Colors.error, bg: '#FFEBEE' },
-};
+function money(value) {
+  return value == null ? '-' : `R$ ${Number(value).toFixed(2).replace('.', ',')}`;
+}
 
 export default function RequestDetailScreen({ route, navigation }) {
-  const { request } = route.params;
-  const { updateRequest } = useRequests();
-
-  const [quotedValue, setQuotedValue] = useState(request.quotedValue || '');
-  const [adminResponse, setAdminResponse] = useState(request.adminResponse || '');
+  const {
+    requests, sendQuote, confirmRequest, startRequest,
+    completeRequest, markPaymentPaid, rejectRequest,
+  } = useRequests();
+  const id = route.params.requestId || route.params.request?.id;
+  const request = requests.find((item) => item.id === id) || route.params.request;
+  const [quotedValue, setQuotedValue] = useState(request?.quotedValue == null ? '' : String(request.quotedValue));
+  const [description, setDescription] = useState(request?.adminResponse || '');
+  const [completionPhotos, setCompletionPhotos] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const status = STATUS_CONFIG[request.status] || STATUS_CONFIG.pending;
+  if (!request) return <SafeAreaView style={styles.safe}><Text style={styles.empty}>Solicitação não encontrada.</Text></SafeAreaView>;
+
   const date = new Date(request.scheduledDate);
-  const formattedDate = date.toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
-  const formattedTime = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const address = [request.address?.street && `${request.address.street}, ${request.address.number}`, request.address?.complement, request.address?.neighborhood, request.address?.city].filter(Boolean).join(' - ');
 
-  const fullAddress = [
-    `${request.address.street}, ${request.address.number}`,
-    request.address.complement,
-    request.address.neighborhood,
-    request.address.city,
-  ]
-    .filter(Boolean)
-    .join(' — ');
-
-  async function handleSendQuote() {
-    if (!quotedValue.trim()) {
-      Alert.alert('Atenção', 'Informe o valor do orçamento.');
-      return;
-    }
+  async function run(action, success) {
     setLoading(true);
     try {
-      await updateRequest(request.id, {
-        status: 'quoted',
-        quotedValue: quotedValue.trim(),
-        adminResponse: adminResponse.trim(),
-      });
-      Alert.alert('Orçamento enviado!', 'O orçamento foi registrado com sucesso.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      await action();
+      Alert.alert('Concluído', success);
+    } catch (error) {
+      Alert.alert('Atenção', error.message);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleConfirm() {
-    setLoading(true);
-    try {
-      await updateRequest(request.id, { status: 'confirmed' });
-      Alert.alert('Confirmado!', 'Agendamento confirmado com sucesso.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleReject() {
-    Alert.alert('Recusar solicitação', 'Tem certeza que deseja recusar esta solicitação?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Recusar',
-        style: 'destructive',
-        onPress: async () => {
-          setLoading(true);
-          try {
-            await updateRequest(request.id, { status: 'rejected' });
-            navigation.goBack();
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
+  async function pickCompletionPhoto() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return Alert.alert('Permissão necessária', 'Permita o acesso à galeria.');
+    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
+    if (!result.canceled && result.assets?.[0]) setCompletionPhotos((current) => [...current, result.assets[0].uri]);
   }
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backText}>← Voltar</Text>
-        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.back}>Voltar</Text></TouchableOpacity>
+        <View style={styles.titleRow}><Text style={styles.title}>Solicitação</Text><StatusBadge status={request.status} /></View>
 
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>Solicitação</Text>
-          <View style={[styles.badge, { backgroundColor: status.bg }]}>
-            <Text style={[styles.badgeText, { color: status.color }]}>{status.label}</Text>
-          </View>
-        </View>
-
-        {/* Serviço */}
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Serviço solicitado</Text>
-          <View style={styles.serviceRow}>
-            <Text style={styles.serviceIcon}>{request.serviceIcon}</Text>
-            <Text style={styles.serviceName}>{request.serviceName}</Text>
-          </View>
+          <Text style={styles.label}>Serviço e cliente</Text>
+          <Text style={styles.heading}>{request.serviceIcon} {request.serviceName}</Text>
+          <Text style={styles.text}>Prestador: {request.providerName}</Text>
+          <Text style={styles.text}>{request.userName} · {request.userEmail} · {request.userPhone || 'sem telefone'}</Text>
         </View>
-
-        {/* Cliente */}
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Cliente</Text>
-          <Text style={styles.cardValue}>👤  {request.userName}</Text>
-          <Text style={styles.cardValue}>✉️  {request.userEmail}</Text>
-          {request.userPhone && <Text style={styles.cardValue}>📞  {request.userPhone}</Text>}
+          <Text style={styles.label}>Agendamento e local</Text>
+          <Text style={styles.text}>{date.toLocaleDateString('pt-BR')} às {date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Text>
+          <Text style={styles.text}>{address}</Text>
         </View>
-
-        {/* Data */}
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Data e horário</Text>
-          <Text style={styles.cardValue}>📅  {formattedDate}</Text>
-          <Text style={styles.cardValue}>🕐  {formattedTime}</Text>
+          <Text style={styles.label}>Descrição/observações</Text>
+          <Text style={styles.text}>{request.observations?.trim() || 'Sem observações.'}</Text>
         </View>
+        {request.photos?.length > 0 && <PhotoCard label="Imagens da solicitação" photos={request.photos} />}
 
-        {/* Endereço */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Localização</Text>
-          <Text style={styles.cardValue}>📍  {fullAddress}</Text>
-        </View>
-
-        {/* Observações */}
-        {request.observations?.trim() !== '' && (
+        {request.quotedValue != null && (
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>Observações do cliente</Text>
-            <Text style={styles.cardValue}>{request.observations}</Text>
+            <Text style={styles.label}>Orçamento detalhado</Text>
+            <Text style={styles.quote}>{money(request.quotedValue)}</Text>
+            <Text style={styles.text}>{request.adminResponse}</Text>
           </View>
         )}
 
-        {/* Fotos */}
-        {request.photos?.length > 0 && (
+        {request.payment && (
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>Fotos ({request.photos.length})</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {request.photos.map((uri, i) => (
-                <Image key={i} source={{ uri }} style={styles.photo} />
-              ))}
-            </ScrollView>
+            <Text style={styles.label}>Pagamento</Text>
+            <Text style={styles.text}>Forma: {getPaymentMethodLabel(request.payment.method)}</Text>
+            <Text style={styles.text}>Status: {PAYMENT_STATUS_LABELS[request.payment.status]}</Text>
+            {request.payment.status !== 'paid' && request.payment.method !== 'cash' && (
+              <Button title="Registrar como pago" onPress={() => run(() => markPaymentPaid(id), 'Pagamento atualizado.')} loading={loading} style={styles.action} />
+            )}
           </View>
         )}
 
-        {/* Ações do admin */}
-        {request.status === 'pending' && (
+        {request.status === REQUEST_STATUS.PENDING && (
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>Enviar orçamento</Text>
-            <TextInput
-              style={styles.input}
-              value={quotedValue}
-              onChangeText={setQuotedValue}
-              placeholder="Valor (ex: R$ 250,00)"
-              placeholderTextColor={Colors.textLight}
-              keyboardType="numeric"
-            />
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={adminResponse}
-              onChangeText={setAdminResponse}
-              placeholder="Mensagem para o cliente (opcional)..."
-              placeholderTextColor={Colors.textLight}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-            <Button
-              title="Enviar Orçamento"
-              onPress={handleSendQuote}
-              loading={loading}
-              style={{ marginTop: 4 }}
-            />
-            <Button
-              title="Recusar Solicitação"
-              onPress={handleReject}
-              variant="outline"
-              style={{ marginTop: 10 }}
-            />
+            <Text style={styles.label}>Enviar orçamento</Text>
+            <TextInput style={styles.input} value={quotedValue} onChangeText={setQuotedValue} placeholder="Valor em reais" keyboardType="decimal-pad" />
+            <TextInput style={[styles.input, styles.area]} value={description} onChangeText={setDescription} placeholder="Descrição detalhada obrigatória" multiline />
+            <Button title="Enviar orçamento" onPress={() => run(() => sendQuote(id, quotedValue, description), 'Orçamento enviado ao cliente.')} loading={loading} />
+            <Button title="Recusar solicitação" variant="outline" onPress={() => run(() => rejectRequest(id), 'Solicitação recusada.')} style={styles.action} />
           </View>
         )}
 
-        {request.status === 'quoted' && (
+        {request.status === REQUEST_STATUS.QUOTED && <Notice text="Aguardando o cliente aceitar ou recusar o orçamento." />}
+        {request.status === REQUEST_STATUS.QUOTE_ACCEPTED && (
+          <Button title="Confirmar/agendar serviço" onPress={() => run(() => confirmRequest(id), 'Serviço confirmado.')} loading={loading} />
+        )}
+        {request.status === REQUEST_STATUS.CONFIRMED && (
+          <Button title="Marcar como em andamento" onPress={() => run(() => startRequest(id), 'Serviço iniciado.')} loading={loading} />
+        )}
+        {[REQUEST_STATUS.CONFIRMED, REQUEST_STATUS.IN_PROGRESS].includes(request.status) && (
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>Orçamento enviado</Text>
-            <Text style={styles.quoteValue}>{request.quotedValue}</Text>
-            {request.adminResponse ? (
-              <Text style={styles.cardValue}>{request.adminResponse}</Text>
-            ) : null}
-            <Button
-              title="Confirmar Agendamento"
-              onPress={handleConfirm}
-              loading={loading}
-              style={{ marginTop: 14 }}
-            />
-            <Button
-              title="Recusar"
-              onPress={handleReject}
-              variant="outline"
-              style={{ marginTop: 10 }}
-            />
+            <Text style={styles.label}>Concluir com evidências</Text>
+            <Button title="Adicionar imagem de conclusão" variant="outline" onPress={pickCompletionPhoto} />
+            {completionPhotos.length > 0 && <PhotoStrip photos={completionPhotos} />}
+            <Button title="Marcar serviço como concluído" onPress={() => run(() => completeRequest(id, completionPhotos), 'Serviço concluído.')} loading={loading} style={styles.action} />
           </View>
         )}
-
-        {(request.status === 'confirmed' || request.status === 'rejected') && (
-          <View style={[styles.card, { alignItems: 'center' }]}>
-            <Text style={styles.finalIcon}>
-              {request.status === 'confirmed' ? '✅' : '❌'}
-            </Text>
-            <Text style={styles.finalText}>
-              {request.status === 'confirmed'
-                ? 'Agendamento confirmado'
-                : 'Solicitação recusada'}
-            </Text>
+        {request.completionPhotos?.length > 0 && <PhotoCard label="Evidências de conclusão" photos={request.completionPhotos} />}
+        {request.rating && (
+          <View style={styles.card}>
+            <Text style={styles.label}>Avaliação do cliente</Text>
+            <Text style={styles.heading}>{'★'.repeat(request.rating.score)}{'☆'.repeat(5 - request.rating.score)}</Text>
+            <Text style={styles.text}>{request.rating.comment}</Text>
           </View>
         )}
       </ScrollView>
@@ -239,58 +129,31 @@ export default function RequestDetailScreen({ route, navigation }) {
   );
 }
 
+function PhotoStrip({ photos }) {
+  return <ScrollView horizontal>{photos.map((uri) => <Image key={uri} source={{ uri }} style={styles.photo} />)}</ScrollView>;
+}
+function PhotoCard({ label, photos }) {
+  return <View style={styles.card}><Text style={styles.label}>{label}</Text><PhotoStrip photos={photos} /></View>;
+}
+function Notice({ text }) {
+  return <View style={styles.notice}><Text style={styles.text}>{text}</Text></View>;
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: 24, paddingBottom: 40 },
-  backButton: { paddingTop: 16, paddingBottom: 8 },
-  backText: { color: Colors.primary, fontSize: 15, fontWeight: '500' },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    marginTop: 8,
-  },
+  scroll: { width: '100%', maxWidth: 860, alignSelf: 'center', padding: 20, paddingBottom: 40, gap: 12 },
+  back: { color: Colors.primary, fontWeight: '600', marginBottom: 4 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   title: { fontSize: 24, fontWeight: '700', color: Colors.textDark },
-  badge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 2,
-    gap: 6,
-  },
-  cardLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textLight,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  cardValue: { fontSize: 14, color: Colors.textDark, lineHeight: 22 },
-  serviceRow: { flexDirection: 'row', alignItems: 'center' },
-  serviceIcon: { fontSize: 26, marginRight: 12 },
-  serviceName: { fontSize: 17, fontWeight: '600', color: Colors.textDark },
-  photo: { width: 80, height: 80, borderRadius: 8, marginRight: 8, marginTop: 4 },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: Colors.textDark,
-    marginTop: 6,
-  },
-  textArea: { minHeight: 80, textAlignVertical: 'top' },
-  quoteValue: { fontSize: 22, fontWeight: '700', color: Colors.primary },
-  finalIcon: { fontSize: 40, marginBottom: 8 },
-  finalText: { fontSize: 16, fontWeight: '600', color: Colors.textDark },
+  card: { backgroundColor: Colors.surface, borderRadius: 12, padding: 16, gap: 8 },
+  label: { fontSize: 11, fontWeight: '700', color: Colors.textLight, textTransform: 'uppercase', letterSpacing: 0.7 },
+  heading: { fontSize: 17, fontWeight: '700', color: Colors.textDark },
+  text: { fontSize: 14, color: Colors.textMedium, lineHeight: 21 },
+  quote: { fontSize: 24, fontWeight: '700', color: Colors.primary },
+  input: { borderWidth: 1, borderColor: Colors.border, borderRadius: 9, padding: 12, color: Colors.textDark },
+  area: { minHeight: 90, textAlignVertical: 'top' },
+  action: { marginTop: 6 },
+  photo: { width: 88, height: 88, borderRadius: 8, marginRight: 8 },
+  notice: { backgroundColor: '#E3F2FD', borderRadius: 10, padding: 14 },
+  empty: { padding: 30, color: Colors.textMedium },
 });

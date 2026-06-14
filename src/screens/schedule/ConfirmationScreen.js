@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,20 +9,37 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import emailjs from '@emailjs/react-native';
+import { send as sendEmail } from '@emailjs/react-native';
 import Button from '../../components/Button';
 import Colors from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { useRequests } from '../../context/RequestsContext';
+import { providerRepository } from '../../repositories/providerRepository';
+import { DEFAULT_PROVIDER } from '../../constants/providers';
 
-const EMAILJS_SERVICE_ID = 'service_xghwr1x';
-const EMAILJS_TEMPLATE_ID = 'template_ipdjqtm';
+const EMAILJS_SERVICE_ID = process.env.EXPO_PUBLIC_EMAILJS_SERVICE_ID;
+const EMAILJS_TEMPLATE_ID = process.env.EXPO_PUBLIC_EMAILJS_TEMPLATE_ID;
 
 export default function ConfirmationScreen({ route, navigation }) {
   const { service, scheduledDate, observations, address, photos } = route.params;
   const { user } = useAuth();
   const { addRequest } = useRequests();
   const [loading, setLoading] = useState(false);
+  const [providers, setProviders] = useState([DEFAULT_PROVIDER]);
+  const [providerId, setProviderId] = useState(DEFAULT_PROVIDER.id);
+  const [providerError, setProviderError] = useState('');
+
+  useEffect(() => {
+    providerRepository.getAll().then((items) => {
+      const active = items.filter((provider) => provider.active);
+      if (active.length) {
+        setProviders(active);
+        setProviderId((current) => current || active[0].id);
+      }
+    }).catch(() => {
+      setProviderError('Não foi possível carregar os prestadores. O prestador padrão será utilizado.');
+    });
+  }, []);
 
   const date = new Date(scheduledDate);
   const formattedDate = date.toLocaleDateString('pt-BR', {
@@ -43,6 +60,10 @@ export default function ConfirmationScreen({ route, navigation }) {
     .join(' — ');
 
   async function handleConfirm() {
+    if (!providerId) {
+      Alert.alert('Atenção', 'Selecione um prestador antes de confirmar.');
+      return;
+    }
     setLoading(true);
     try {
       await addRequest({
@@ -56,11 +77,12 @@ export default function ConfirmationScreen({ route, navigation }) {
         observations,
         address,
         photos,
+        providerId,
       });
 
       // Envia e-mail de notificação para a empresa (não bloqueia se falhar)
       try {
-        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        if (EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID) await sendEmail(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
           service_name: service.name,
           client_name: user.name,
           client_email: user.email,
@@ -75,18 +97,12 @@ export default function ConfirmationScreen({ route, navigation }) {
           observations: observations.trim() || 'Nenhuma',
           photos_count: photos.length.toString(),
         });
-      } catch (emailErr) {
-        console.warn('EmailJS erro:', JSON.stringify(emailErr));
-      }
+      } catch {}
 
-      Alert.alert(
-        'Solicitação enviada!',
-        'Recebemos seu pedido de orçamento. Nossa equipe entrará em contato em breve.',
-        [{ text: 'OK', onPress: () => navigation.navigate('Home') }],
-      );
-    } catch (err) {
-      console.error('Erro ao salvar solicitação:', err);
-      Alert.alert('Erro', 'Não foi possível salvar a solicitação. Tente novamente.');
+      navigation.navigate('MyRequestsScreen');
+      Alert.alert('Solicitação enviada!', 'Recebemos seu pedido de orçamento.');
+    } catch (error) {
+      Alert.alert('Não foi possível enviar', error.message || 'Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -109,6 +125,24 @@ export default function ConfirmationScreen({ route, navigation }) {
             <Text style={styles.serviceIcon}>{service.icon}</Text>
             <Text style={styles.serviceName}>{service.name}</Text>
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Prestador</Text>
+          <View style={styles.providerOptions}>
+            {providers.map((provider) => (
+              <TouchableOpacity
+                key={provider.id}
+                onPress={() => setProviderId(provider.id)}
+                style={[styles.providerOption, providerId === provider.id && styles.providerSelected]}
+              >
+                <Text style={[styles.providerText, providerId === provider.id && styles.providerTextSelected]}>
+                  {provider.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {providerError ? <Text style={styles.errorText}>{providerError}</Text> : null}
         </View>
 
         {/* Data e hora */}
@@ -160,6 +194,7 @@ export default function ConfirmationScreen({ route, navigation }) {
           title="Confirmar Solicitação"
           onPress={handleConfirm}
           loading={loading}
+          disabled={!providerId}
           style={styles.button}
         />
       </ScrollView>
@@ -169,7 +204,7 @@ export default function ConfirmationScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: 24, paddingBottom: 40 },
+  scroll: { width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: 24, paddingBottom: 40 },
   backButton: { paddingTop: 16, paddingBottom: 8 },
   backText: { color: Colors.primary, fontSize: 15, fontWeight: '500' },
   title: { fontSize: 24, fontWeight: '700', color: Colors.textDark, marginBottom: 4, marginTop: 8 },
@@ -206,4 +241,10 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   button: { marginTop: 8 },
+  providerOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  providerOption: { borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 10 },
+  providerSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  providerText: { color: Colors.textMedium, fontSize: 13 },
+  providerTextSelected: { color: Colors.white, fontWeight: '600' },
+  errorText: { color: Colors.error, fontSize: 12, lineHeight: 18, marginTop: 8 },
 });

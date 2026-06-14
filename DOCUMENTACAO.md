@@ -10,13 +10,17 @@ Aplicativo mobile desenvolvido para a empresa **Jardinagem Weber**, permitindo q
 
 | Tecnologia | Versão | Finalidade |
 |---|---|---|
-| React Native | 0.76.9 | Framework mobile |
-| Expo | ~54.0.0 | Plataforma de desenvolvimento |
+| React Native | 0.81.5 | Framework mobile |
+| Expo | ~54.0.35 | Plataforma de desenvolvimento |
 | React Navigation | ^7.2.2 | Navegação entre telas |
-| AsyncStorage | 1.23.1 | Persistência local de dados |
-| expo-image-picker | ~16.0.6 | Câmera e galeria de fotos |
-| @react-native-community/datetimepicker | 8.2.0 | Seleção de data e hora |
+| AsyncStorage | 2.2.0 | Persistência local de dados |
+| expo-image-picker | ~17.0.11 | Câmera e galeria de fotos |
+| expo-crypto | ~15.0.9 | Hash das senhas |
+| bcryptjs | ^3.0.3 | Hash adaptativo de senhas |
+| NetInfo | 11.4.1 | Detecção de conexão e reconexão |
+| @react-native-community/datetimepicker | 8.4.4 | Seleção de data e hora |
 | EmailJS | 5.1.0 | Envio de e-mail via API |
+| ESLint | ^9 | Análise estática |
 
 ---
 
@@ -32,14 +36,21 @@ Aplicativo mobile desenvolvido para a empresa **Jardinagem Weber**, permitindo q
   - Tela de confirmação com resumo completo
 - Acompanhamento das solicitações e seus status
 - Visualização do orçamento enviado pela empresa
+- Aceite ou recusa do orçamento com seleção da forma de pagamento
+- Cancelamento com antecedência mínima de quatro horas
+- Visualização das evidências do serviço concluído
+- Avaliação única com nota de 1 a 5 e comentário
+- Recuperação de senha com código temporário
 
 ### Área Administrativa (Empresa)
 - Login exclusivo para o administrador
 - Painel com todas as solicitações recebidas
-- Indicadores: total, pendentes e confirmados
+- Indicadores completos, incluindo conversão de orçamentos
 - Detalhes completos de cada solicitação (fotos, endereço, observações)
-- Envio de orçamento com valor e mensagem para o cliente
-- Confirmação ou recusa de agendamento
+- Envio de orçamento com valor e descrição detalhada obrigatórios
+- Confirmação somente após o aceite do cliente
+- Início e conclusão do serviço com evidências
+- Registro do status do pagamento e visualização da avaliação
 
 ### Integração com API
 - **EmailJS API**: ao confirmar uma solicitação, o app envia automaticamente um e-mail de notificação para a empresa com todos os dados do pedido.
@@ -56,13 +67,19 @@ jardinagem-weber/
 ├── src/
 │   ├── constants/
 │   │   ├── colors.js               # Paleta de cores do tema
-│   │   └── services.js             # Lista dos 6 serviços oferecidos
+│   │   ├── services.js             # Lista dos 6 serviços oferecidos
+│   │   ├── requestStatus.js        # Status das solicitações
+│   │   └── payment.js              # Formas e status de pagamento
 │   ├── context/
-│   │   ├── AuthContext.js          # Autenticação (login, cadastro, logout)
-│   │   └── RequestsContext.js      # Gerenciamento de solicitações
+│   │   ├── AuthContext.js          # Estado da autenticação
+│   │   ├── RequestsContext.js      # Estado das solicitações
+│   │   └── SyncContext.js          # Estado de conexão e alterações locais
+│   ├── repositories/               # Acesso centralizado ao AsyncStorage
+│   ├── services/                   # Regras de autenticação e solicitações
 │   ├── components/
 │   │   ├── Button.js               # Botão reutilizável (primary/outline)
-│   │   └── Input.js                # Campo de texto com label e erro
+│   │   ├── Input.js                # Campo de texto com label e erro
+│   │   └── StatusBadge.js          # Identificação visual dos status
 │   ├── navigation/
 │   │   ├── AuthNavigator.js        # Navegação das telas de autenticação
 │   │   ├── AppNavigator.js         # Navegação do cliente autenticado
@@ -70,7 +87,8 @@ jardinagem-weber/
 │   └── screens/
 │       ├── auth/
 │       │   ├── LoginScreen.js
-│       │   └── RegisterScreen.js
+│       │   ├── RegisterScreen.js
+│       │   └── ForgotPasswordScreen.js
 │       ├── home/
 │       │   └── HomeScreen.js
 │       ├── services/
@@ -101,14 +119,17 @@ Escolhe serviço                      Painel de solicitações
    |                                      |
 Preenche data e horário              Visualiza detalhes
    |                                      |
-Informa endereço                     Envia orçamento (valor + mensagem)
+Informa endereço                     Envia orçamento detalhado
    |                                      |
-Anexa fotos (opcional)               Confirma ou recusa
+Anexa fotos (opcional)               Aguarda decisão do cliente
    |                                      |
 Confirma solicitação ──── e-mail ──► Empresa notificada
+   |                                      |
+Aceita/recusa orçamento              Confirma e inicia o serviço
+   |                                      |
+Acompanha e pode cancelar            Conclui anexando evidências
    |
-Acompanha status em
-"Minhas Solicitações"
+Avalia o serviço concluído
 ```
 
 ---
@@ -119,8 +140,13 @@ Acompanha status em
 |---|---|
 | ⏳ Aguardando orçamento | Solicitação enviada, empresa ainda não respondeu |
 | 💰 Orçamento recebido | Empresa enviou o valor do orçamento |
-| ✅ Confirmado | Agendamento confirmado pela empresa |
-| ❌ Recusado | Solicitação recusada pela empresa |
+| ✅ Orçamento aceito | Cliente aceitou o orçamento e escolheu a forma de pagamento |
+| ❌ Orçamento recusado | Cliente ou empresa recusou a solicitação |
+| 📅 Confirmado/agendado | Empresa confirmou após o aceite do cliente |
+| 🔄 Em andamento | Serviço foi iniciado |
+| 🚫 Cancelado | Cliente cancelou respeitando a antecedência mínima |
+| ✅ Concluído | Empresa concluiu com evidências anexadas |
+| ⭐ Avaliado | Cliente registrou uma avaliação única |
 
 ---
 
@@ -135,26 +161,118 @@ Acompanha status em
 
 ---
 
-## Credenciais de Acesso
+## Acesso administrativo
 
-### Administrador (empresa)
-- **E-mail:** admin@jardinagem.com
-- **Senha:** admin123
+O administrador local é provisionado pelas variáveis `EXPO_PUBLIC_ADMIN_EMAIL`,
+`EXPO_PUBLIC_ADMIN_PASSWORD_HASH` e `EXPO_PUBLIC_ADMIN_NAME`. Consulte `.env.example`.
+Não há credencial administrativa fixa no código-fonte.
 
 ### Cliente
 - Cadastro pelo próprio app (nome, e-mail, telefone, senha)
 
 ---
 
-## Armazenamento de Dados
+## Configuração Local
 
-O app utiliza **AsyncStorage** para persistência local, sem necessidade de servidor ou banco de dados externo. Todos os dados ficam armazenados no dispositivo:
+Copie as variáveis de `.env.example` para um arquivo `.env` antes de iniciar o app.
+
+- `EXPO_PUBLIC_ADMIN_EMAIL`, `EXPO_PUBLIC_ADMIN_PASSWORD_HASH` e `EXPO_PUBLIC_ADMIN_NAME` configuram o administrador local.
+- `EXPO_PUBLIC_PROVIDERS_JSON` configura prestadores adicionais.
+- `EXPO_PUBLIC_PROVIDER_ADMINS_JSON` configura administradores associados aos prestadores.
+- As variáveis `EXPO_PUBLIC_EMAILJS_*` são opcionais e habilitam a notificação de novas solicitações.
+- `EXPO_PUBLIC_SYNC_API_URL` habilita o envio automático das operações pendentes.
+
+Gere o hash administrativo com:
+
+```bash
+npm run admin:hash -- "sua-senha"
+```
+
+O comando já retorna a linha pronta para o `.env`, com os caracteres `$` escapados
+para evitar a expansão de variáveis realizada pelo Expo.
+
+---
+
+## Autenticação e Recuperação de Senha
+
+- E-mails são normalizados antes do cadastro e login.
+- A senha deve ter no mínimo 8 caracteres, contendo letras e números.
+- Senhas são armazenadas com bcrypt e fator de custo 10.
+- Senhas antigas em SHA-256 com salt ou texto puro são migradas para bcrypt após o primeiro login válido.
+- Login incorreto exibe a mensagem única `Usuário ou senha inválidos`.
+- A recuperação valida o e-mail cadastrado, gera um código temporário válido por 15 minutos e envia pelo EmailJS.
+- O código é invalidado após o uso e um novo pedido invalida o código anterior.
+
+---
+
+## Regras das Solicitações
+
+1. A empresa envia orçamento com valor válido e descrição detalhada.
+2. O cliente aceita ou recusa o orçamento.
+3. A empresa só pode confirmar após o aceite do cliente.
+4. O cliente pode cancelar estados elegíveis com no mínimo quatro horas de antecedência.
+5. A conclusão exige ao menos uma imagem de evidência.
+6. O cliente pode avaliar o serviço concluído uma única vez, com nota de 1 a 5 e comentário.
+
+As imagens de conclusão ficam separadas das imagens anexadas na solicitação inicial.
+
+---
+
+## Pagamentos
+
+O cliente escolhe uma forma de pagamento ao aceitar o orçamento:
+
+- Pix
+- Cartão de crédito
+- Cartão de débito
+- Dinheiro
+
+O sistema registra forma e status do pagamento. Pagamentos em dinheiro são marcados como pagos na conclusão do serviço. Não são armazenados dados sensíveis de cartão.
+
+---
+
+## Prestadores
+
+- Prestadores possuem entidade própria com identificador, nome, tipo e estado ativo.
+- O cliente seleciona o prestador na confirmação da solicitação.
+- Cada solicitação, administrador e avaliação fica associado a um `providerId`.
+- O painel administrativo mostra somente solicitações do prestador autenticado.
+- A camada de contexto bloqueia ações sobre solicitações de outro cliente ou prestador.
+- Prestadores e administradores adicionais podem ser configurados pelas variáveis descritas em `.env.example`.
+
+---
+
+## Persistência de Dados
+
+O app utiliza **AsyncStorage** por meio de repositories, sem chamadas diretas nas telas.
+As regras de autenticação e solicitações ficam centralizadas em services.
 
 | Chave | Conteúdo |
 |---|---|
 | `@jardinagem_weber:users` | Lista de usuários cadastrados |
-| `@jardinagem_weber:session` | E-mail do usuário logado |
+| `@jardinagem_weber:session` | Identificador do usuário logado |
 | `@jardinagem_weber:requests` | Todas as solicitações |
+| `@jardinagem_weber:sync_queue` | Histórico de alterações locais |
+| `@jardinagem_weber:providers` | Prestadores cadastrados |
+
+O `SyncContext` utiliza NetInfo para identificar conexão e reconexão. Ao reconectar ou
+receber uma nova operação enquanto conectado, o `SyncService` tenta enviar a fila para
+`EXPO_PUBLIC_SYNC_API_URL/sync`. Operações concluídas são removidas; falhas registram
+quantidade de tentativas e último erro.
+
+Repositories emitem eventos internos após alterações. Dessa forma, dashboards, listas
+e detalhes são atualizados imediatamente sem depender de navegação ou recarga manual.
+
+---
+
+## Desempenho
+
+- Repositories mantêm cache em memória para evitar leituras repetidas do AsyncStorage.
+- Atualizações são distribuídas por eventos internos, evitando recargas por foco de tela.
+- Listas usam `FlatList`, chaves estáveis e cards memoizados.
+- Filtros, ordenações, métricas e avaliações médias usam memoização.
+- Callbacks de navegação reutilizados evitam recriação desnecessária de propriedades.
+- Layouts limitam largura e quantidade de colunas conforme o tamanho da tela.
 
 ---
 
@@ -203,4 +321,27 @@ O app integra com a API do **EmailJS** para envio de notificações por e-mail.
 - Observações
 - Quantidade de fotos anexadas
 
-**Configuração:** as credenciais estão definidas em `src/screens/schedule/ConfirmationScreen.js`.
+**Configuração:** utilize as variáveis `EXPO_PUBLIC_EMAILJS_PUBLIC_KEY`,
+`EXPO_PUBLIC_EMAILJS_SERVICE_ID`, `EXPO_PUBLIC_EMAILJS_TEMPLATE_ID` e
+`EXPO_PUBLIC_EMAILJS_RESET_TEMPLATE_ID`.
+
+---
+
+## Verificação do Projeto
+
+```bash
+npm install
+npx expo-doctor
+npx expo export --platform web
+npm run dead-code
+npm audit
+npm run lint
+npm run start
+npm run android
+npm run ios
+npm run web
+```
+
+O projeto possui lint configurado em `npm run lint`, mas ainda não possui testes automatizados.
+
+O relatório requisito por requisito está em `RELATORIO_ADERENCIA_FINAL.md`.

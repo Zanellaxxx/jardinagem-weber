@@ -1,0 +1,6 @@
+{
+  "ignoreDependencies": [
+    "react-dom",
+    "react-native-web"
+  ]
+}

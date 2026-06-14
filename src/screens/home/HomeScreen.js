@@ -1,19 +1,24 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import Colors from '../../constants/colors';
 import SERVICES from '../../constants/services';
 
-function ServiceCard({ item, onPress }) {
+const ServiceCard = memo(function ServiceCard({ item, onPress, columns }) {
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={[styles.card, columns === 1 && styles.cardSingle, columns === 3 && styles.cardWide]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
       <Text style={styles.cardIcon}>{item.icon}</Text>
       <Text style={styles.cardName}>{item.name}</Text>
       <Text style={styles.cardDescription} numberOfLines={2}>
@@ -24,12 +29,18 @@ function ServiceCard({ item, onPress }) {
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 export default function HomeScreen({ navigation }) {
   const { user, logout } = useAuth();
+  const { width } = useWindowDimensions();
+  const columns = width >= 1000 ? 3 : width < 560 ? 1 : 2;
 
   const firstName = user?.name?.split(' ')[0] || 'Olá';
+  const openService = useCallback(
+    (service) => navigation.navigate('ServiceDetail', { service }),
+    [navigation],
+  );
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -60,15 +71,17 @@ export default function HomeScreen({ navigation }) {
       <Text style={styles.sectionTitle}>Nossos Serviços</Text>
 
       <FlatList
+        key={columns}
         data={SERVICES}
         keyExtractor={item => item.id}
-        numColumns={2}
+        numColumns={columns}
         contentContainerStyle={styles.list}
-        columnWrapperStyle={styles.row}
+        columnWrapperStyle={columns > 1 ? styles.row : undefined}
         renderItem={({ item }) => (
           <ServiceCard
             item={item}
-            onPress={() => navigation.navigate('ServiceDetail', { service: item })}
+            columns={columns}
+            onPress={() => openService(item)}
           />
         )}
         showsVerticalScrollIndicator={false}
@@ -130,7 +143,7 @@ const styles = StyleSheet.create({
   myRequestsIcon: { fontSize: 20, marginRight: 10 },
   myRequestsText: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.textDark },
   myRequestsArrow: { fontSize: 22, color: Colors.textLight },
-  list: { paddingHorizontal: 12, paddingBottom: 24 },
+  list: { width: '100%', maxWidth: 1100, alignSelf: 'center', paddingHorizontal: 12, paddingBottom: 24 },
   row: { justifyContent: 'space-between' },
   card: {
     width: '48%',
@@ -144,6 +157,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  cardSingle: { width: '100%' },
+  cardWide: { width: '31.5%' },
   cardIcon: { fontSize: 36, marginBottom: 8 },
   cardName: { fontSize: 14, fontWeight: '700', color: Colors.textDark, marginBottom: 6 },
   cardDescription: { fontSize: 12, color: Colors.textLight, lineHeight: 17 },
