@@ -50,7 +50,7 @@ Aplicativo mobile desenvolvido para a empresa **Jardinagem Weber**, permitindo q
 - Indicadores completos, incluindo conversão de orçamentos
 - Detalhes completos de cada solicitação (fotos, endereço, observações)
 - Envio de orçamento com valor e descrição detalhada obrigatórios, retornando ao painel após salvar
-- Confirmação somente após o aceite do cliente
+- Confirmação somente após o aceite do cliente, com ajuste de data e horário do agendamento
 - Início e conclusão do serviço com evidências
 - Registro do status do pagamento e visualização da avaliação
 
@@ -216,7 +216,7 @@ para evitar a expansão de variáveis realizada pelo Expo.
 
 1. A empresa envia orçamento com valor válido e descrição detalhada.
 2. O cliente aceita ou recusa o orçamento.
-3. A empresa só pode confirmar após o aceite do cliente.
+3. A empresa só pode confirmar após o aceite do cliente e pode ajustar data e horário antes da confirmação.
 4. O cliente pode cancelar estados elegíveis com no mínimo quatro horas de antecedência.
 5. A conclusão exige ao menos uma imagem de evidência.
 6. O cliente pode avaliar o serviço concluído uma única vez, com nota de 1 a 5 e comentário.

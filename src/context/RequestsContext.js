@@ -91,7 +91,7 @@ export function RequestsProvider({ children }) {
     acceptQuote: (id, paymentMethod) => runClientAction(id, acceptQuote, paymentMethod),
     rejectQuote: (id) => runClientAction(id, rejectQuote),
     rejectRequest: (id) => runAdminAction(id, rejectRequest),
-    confirmRequest: (id) => runAdminAction(id, confirmRequest),
+    confirmRequest: (id, scheduledDate) => runAdminAction(id, confirmRequest, scheduledDate),
     startRequest: (id) => runAdminAction(id, startRequest),
     cancelRequest: (id) => runClientAction(id, cancelRequest),
     completeRequest: (id, photos) => runAdminAction(id, completeRequest, photos),

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '../../components/Button';
+import DateTimeFields, { formatDateInput, formatTimeInput, updateDateFromInput, updateTimeFromInput } from '../../components/DateTimeFields';
 import StatusBadge from '../../components/StatusBadge';
 import Colors from '../../constants/colors';
 import { getPaymentMethodLabel, PAYMENT_STATUS_LABELS } from '../../constants/payment';
@@ -33,11 +35,35 @@ export default function RequestDetailScreen({ route, navigation }) {
   const [completionPhotos, setCompletionPhotos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [scheduledDate, setScheduledDate] = useState(() => new Date(request?.scheduledDate || Date.now()));
+  const [scheduleDateInput, setScheduleDateInput] = useState(() => formatDateInput(new Date(request?.scheduledDate || Date.now())));
+  const [scheduleTimeInput, setScheduleTimeInput] = useState(() => formatTimeInput(new Date(request?.scheduledDate || Date.now())));
+  const [showScheduleDatePicker, setShowScheduleDatePicker] = useState(false);
+  const [showScheduleTimePicker, setShowScheduleTimePicker] = useState(false);
+
+  useEffect(() => {
+    if (request?.scheduledDate) {
+      const updated = new Date(request.scheduledDate);
+      setScheduledDate(updated);
+      setScheduleDateInput(formatDateInput(updated));
+      setScheduleTimeInput(formatTimeInput(updated));
+    }
+  }, [request?.scheduledDate]);
 
   if (!request) return <SafeAreaView style={styles.safe}><Text style={styles.empty}>Solicitação não encontrada.</Text></SafeAreaView>;
 
   const date = new Date(request.scheduledDate);
   const address = [request.address?.street && `${request.address.street}, ${request.address.number}`, request.address?.complement, request.address?.neighborhood, request.address?.city].filter(Boolean).join(' - ');
+  const formattedScheduleDate = scheduledDate.toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+  const formattedScheduleTime = scheduledDate.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   async function run(action, success) {
     setLoading(true);
@@ -85,6 +111,57 @@ export default function RequestDetailScreen({ route, navigation }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleConfirmSchedule() {
+    setLoading(true);
+    setFeedback(null);
+    try {
+      const updatedRequest = await confirmRequest(id, scheduledDate.toISOString());
+      if (updatedRequest?.status !== REQUEST_STATUS.CONFIRMED) {
+        throw new Error('O agendamento foi salvo, mas o status não foi atualizado.');
+      }
+
+      navigation.navigate('AdminScreen');
+    } catch (error) {
+      const message = error.message || 'Não foi possível confirmar o agendamento.';
+      setFeedback({ type: 'error', message });
+      Alert.alert('Atenção', message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function onScheduleDateChange(event, selected) {
+    setShowScheduleDatePicker(Platform.OS === 'ios');
+    if (selected) {
+      const updated = new Date(selected);
+      updated.setHours(scheduledDate.getHours(), scheduledDate.getMinutes(), 0, 0);
+      setScheduledDate(updated);
+      setScheduleDateInput(formatDateInput(updated));
+    }
+  }
+
+  function onScheduleTimeChange(event, selected) {
+    setShowScheduleTimePicker(Platform.OS === 'ios');
+    if (selected) {
+      const updated = new Date(scheduledDate);
+      updated.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+      setScheduledDate(updated);
+      setScheduleTimeInput(formatTimeInput(updated));
+    }
+  }
+
+  function onWebScheduleDateChange(value) {
+    const result = updateDateFromInput(scheduledDate, value);
+    setScheduleDateInput(result.value);
+    setScheduledDate(result.date);
+  }
+
+  function onWebScheduleTimeChange(value) {
+    const result = updateTimeFromInput(scheduledDate, value);
+    setScheduleTimeInput(result.value);
+    setScheduledDate(result.date);
   }
 
   async function pickCompletionPhoto() {
@@ -155,7 +232,50 @@ export default function RequestDetailScreen({ route, navigation }) {
 
         {request.status === REQUEST_STATUS.QUOTED && <Notice text="Aguardando o cliente aceitar ou recusar o orçamento." />}
         {request.status === REQUEST_STATUS.QUOTE_ACCEPTED && (
-          <Button title="Confirmar/agendar serviço" onPress={() => run(() => confirmRequest(id), 'Serviço confirmado.')} loading={loading} />
+          <View style={styles.card}>
+            <Text style={styles.label}>Confirmar/agendar serviço</Text>
+            <Text style={styles.text}>Ajuste a data e o horário antes de confirmar o serviço.</Text>
+
+            {Platform.OS === 'web' ? (
+              <DateTimeFields
+                dateValue={scheduleDateInput}
+                timeValue={scheduleTimeInput}
+                onDateChange={onWebScheduleDateChange}
+                onTimeChange={onWebScheduleTimeChange}
+                dateLabel="Data"
+                timeLabel="Horário"
+              />
+            ) : (
+              <TouchableOpacity style={styles.pickerRow} onPress={() => setShowScheduleDatePicker(true)}>
+                <Text style={styles.pickerText}>Data: {formattedScheduleDate}</Text>
+              </TouchableOpacity>
+            )}
+            {Platform.OS !== 'web' && showScheduleDatePicker && (
+              <DateTimePicker
+                value={scheduledDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                minimumDate={new Date()}
+                onChange={onScheduleDateChange}
+              />
+            )}
+
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity style={styles.pickerRow} onPress={() => setShowScheduleTimePicker(true)}>
+                <Text style={styles.pickerText}>Horário: {formattedScheduleTime}</Text>
+              </TouchableOpacity>
+            )}
+            {Platform.OS !== 'web' && showScheduleTimePicker && (
+              <DateTimePicker
+                value={scheduledDate}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onScheduleTimeChange}
+              />
+            )}
+
+            <Button title="Confirmar/agendar serviço" onPress={handleConfirmSchedule} loading={loading} style={styles.action} />
+          </View>
         )}
         {request.status === REQUEST_STATUS.CONFIRMED && (
           <Button title="Marcar como em andamento" onPress={() => run(() => startRequest(id), 'Serviço iniciado.')} loading={loading} />
@@ -204,6 +324,14 @@ const styles = StyleSheet.create({
   quote: { fontSize: 24, fontWeight: '700', color: Colors.primary },
   input: { borderWidth: 1, borderColor: Colors.border, borderRadius: 9, padding: 12, color: Colors.textDark },
   area: { minHeight: 90, textAlignVertical: 'top' },
+  pickerRow: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 9,
+    padding: 12,
+    backgroundColor: Colors.background,
+  },
+  pickerText: { color: Colors.textDark, fontSize: 14 },
   action: { marginTop: 6 },
   photo: { width: 88, height: 88, borderRadius: 8, marginRight: 8 },
   feedback: { backgroundColor: '#E8F5E9', borderRadius: 10, padding: 14 },

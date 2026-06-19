@@ -10,6 +10,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '../../components/Button';
+import DateTimeFields, { formatDateInput, formatTimeInput, updateDateFromInput, updateTimeFromInput } from '../../components/DateTimeFields';
 import Colors from '../../constants/colors';
 
 export default function ScheduleScreen({ route, navigation }) {
@@ -23,6 +24,8 @@ export default function ScheduleScreen({ route, navigation }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [observations, setObservations] = useState('');
+  const [dateInput, setDateInput] = useState(formatDateInput(tomorrow));
+  const [timeInput, setTimeInput] = useState(formatTimeInput(tomorrow));
 
   const formattedDate = date.toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -41,6 +44,7 @@ export default function ScheduleScreen({ route, navigation }) {
       const updated = new Date(selected);
       updated.setHours(date.getHours(), date.getMinutes());
       setDate(updated);
+      setDateInput(formatDateInput(updated));
     }
   }
 
@@ -50,7 +54,20 @@ export default function ScheduleScreen({ route, navigation }) {
       const updated = new Date(date);
       updated.setHours(selected.getHours(), selected.getMinutes());
       setDate(updated);
+      setTimeInput(formatTimeInput(updated));
     }
+  }
+
+  function onWebDateChange(value) {
+    const result = updateDateFromInput(date, value);
+    setDateInput(result.value);
+    setDate(result.date);
+  }
+
+  function onWebTimeChange(value) {
+    const result = updateTimeFromInput(date, value);
+    setTimeInput(result.value);
+    setDate(result.date);
   }
 
   function handleNext() {
@@ -72,13 +89,26 @@ export default function ScheduleScreen({ route, navigation }) {
         <Text style={styles.subtitle}>{service.icon}  {service.name}</Text>
 
         {/* Data */}
-        <Text style={styles.sectionLabel}>Data preferida</Text>
-        <TouchableOpacity style={styles.pickerRow} onPress={() => setShowDatePicker(true)}>
-          <Text style={styles.pickerIcon}>📅</Text>
-          <Text style={styles.pickerText}>{formattedDate}</Text>
-        </TouchableOpacity>
+        {Platform.OS === 'web' ? (
+          <DateTimeFields
+            dateValue={dateInput}
+            timeValue={timeInput}
+            onDateChange={onWebDateChange}
+            onTimeChange={onWebTimeChange}
+            dateLabel="Data preferida"
+            timeLabel="Horário preferido"
+          />
+        ) : (
+          <>
+            <Text style={styles.sectionLabel}>Data preferida</Text>
+            <TouchableOpacity style={styles.pickerRow} onPress={() => setShowDatePicker(true)}>
+              <Text style={styles.pickerIcon}>📅</Text>
+              <Text style={styles.pickerText}>{formattedDate}</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
-        {showDatePicker && (
+        {Platform.OS !== 'web' && showDatePicker && (
           <DateTimePicker
             value={date}
             mode="date"
@@ -88,14 +118,17 @@ export default function ScheduleScreen({ route, navigation }) {
           />
         )}
 
-        {/* Horário */}
-        <Text style={styles.sectionLabel}>Horário preferido</Text>
-        <TouchableOpacity style={styles.pickerRow} onPress={() => setShowTimePicker(true)}>
-          <Text style={styles.pickerIcon}>🕐</Text>
-          <Text style={styles.pickerText}>{formattedTime}</Text>
-        </TouchableOpacity>
+        {Platform.OS !== 'web' && (
+          <>
+            <Text style={styles.sectionLabel}>Horário preferido</Text>
+            <TouchableOpacity style={styles.pickerRow} onPress={() => setShowTimePicker(true)}>
+              <Text style={styles.pickerIcon}>🕐</Text>
+              <Text style={styles.pickerText}>{formattedTime}</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
-        {showTimePicker && (
+        {Platform.OS !== 'web' && showTimePicker && (
           <DateTimePicker
             value={date}
             mode="time"

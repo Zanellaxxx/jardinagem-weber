@@ -45,6 +45,14 @@ function transition(request, status, changes = {}) {
   };
 }
 
+function normalizeScheduledDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error('Informe uma data e horário válidos.');
+  if (date.getTime() < Date.now()) throw new Error('A data e o horário do agendamento não podem estar no passado.');
+  return date.toISOString();
+}
+
 export function sendQuote(request, quotedValue, description) {
   assertStatus(request, [REQUEST_STATUS.PENDING], 'Somente solicitações pendentes podem receber orçamento.');
   const numericValue = Number(String(quotedValue).replace(',', '.'));
@@ -80,13 +88,16 @@ export function rejectRequest(request) {
   return transition(request, REQUEST_STATUS.QUOTE_REJECTED);
 }
 
-export function confirmRequest(request) {
+export function confirmRequest(request, scheduledDate) {
   assertStatus(
     request,
     [REQUEST_STATUS.QUOTE_ACCEPTED],
     'O cliente precisa aceitar o orçamento antes da confirmação.',
   );
-  return transition(request, REQUEST_STATUS.CONFIRMED);
+  const normalizedScheduledDate = normalizeScheduledDate(scheduledDate);
+  return transition(request, REQUEST_STATUS.CONFIRMED, {
+    ...(normalizedScheduledDate ? { scheduledDate: normalizedScheduledDate } : {}),
+  });
 }
 
 export function startRequest(request) {
