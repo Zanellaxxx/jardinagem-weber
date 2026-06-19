@@ -44,8 +44,8 @@ export default function AdminScreen({ navigation }) {
   const columns = width >= 900 ? 2 : 1;
 
   const providerRequests = useMemo(
-    () => requests.filter((request) => request.providerId === user.providerId),
-    [requests, user.providerId],
+    () => requests,
+    [requests],
   );
 
   const sorted = useMemo(

@@ -20,6 +20,7 @@ Aplicativo mobile desenvolvido para a empresa **Jardinagem Weber**, permitindo q
 | NetInfo | 11.4.1 | Detecção de conexão e reconexão |
 | @react-native-community/datetimepicker | 8.4.4 | Seleção de data e hora |
 | EmailJS | 5.1.0 | Envio de e-mail via API |
+| FormSubmit | API externa | Fallback de envio de e-mail via AJAX |
 | ESLint | ^9 | Análise estática |
 
 ---
@@ -28,6 +29,7 @@ Aplicativo mobile desenvolvido para a empresa **Jardinagem Weber**, permitindo q
 
 ### Área do Cliente
 - Cadastro e login com validação de campos
+- Mensagem de sucesso ao criar conta
 - Visualização dos 6 serviços oferecidos
 - Solicitação de orçamento com fluxo completo:
   - Seleção de data e horário
@@ -47,13 +49,13 @@ Aplicativo mobile desenvolvido para a empresa **Jardinagem Weber**, permitindo q
 - Painel com todas as solicitações recebidas
 - Indicadores completos, incluindo conversão de orçamentos
 - Detalhes completos de cada solicitação (fotos, endereço, observações)
-- Envio de orçamento com valor e descrição detalhada obrigatórios
+- Envio de orçamento com valor e descrição detalhada obrigatórios, retornando ao painel após salvar
 - Confirmação somente após o aceite do cliente
 - Início e conclusão do serviço com evidências
 - Registro do status do pagamento e visualização da avaliação
 
 ### Integração com API
-- **EmailJS API**: ao confirmar uma solicitação, o app envia automaticamente um e-mail de notificação para a empresa com todos os dados do pedido.
+- **EmailJS/FormSubmit**: ao confirmar uma solicitação, o app envia automaticamente um e-mail de notificação para a empresa com todos os dados do pedido. Se o EmailJS não estiver configurado, usa FormSubmit sem abrir nova guia.
 
 ---
 
@@ -61,7 +63,7 @@ Aplicativo mobile desenvolvido para a empresa **Jardinagem Weber**, permitindo q
 
 ```
 jardinagem-weber/
-├── App.js                          # Ponto de entrada, inicialização do EmailJS
+├── App.js                          # Ponto de entrada, inicialização do EmailJS quando configurado
 ├── index.js                        # Registro do componente raiz
 ├── app.json                        # Configurações do Expo
 ├── src/
@@ -163,9 +165,14 @@ Avalia o serviço concluído
 
 ## Acesso administrativo
 
-O administrador local é provisionado pelas variáveis `EXPO_PUBLIC_ADMIN_EMAIL`,
-`EXPO_PUBLIC_ADMIN_PASSWORD_HASH` e `EXPO_PUBLIC_ADMIN_NAME`. Consulte `.env.example`.
-Não há credencial administrativa fixa no código-fonte.
+Para uso acadêmico, o app possui um administrador fixo:
+
+- E-mail: `admin@jardinagemweber.com`
+- Senha: `Admin1234`
+
+Também é possível provisionar outros administradores pelas variáveis
+`EXPO_PUBLIC_ADMIN_EMAIL`, `EXPO_PUBLIC_ADMIN_PASSWORD_HASH`,
+`EXPO_PUBLIC_ADMIN_NAME` e `EXPO_PUBLIC_PROVIDER_ADMINS_JSON`.
 
 ### Cliente
 - Cadastro pelo próprio app (nome, e-mail, telefone, senha)
@@ -179,8 +186,8 @@ Copie as variáveis de `.env.example` para um arquivo `.env` antes de iniciar o 
 - `EXPO_PUBLIC_ADMIN_EMAIL`, `EXPO_PUBLIC_ADMIN_PASSWORD_HASH` e `EXPO_PUBLIC_ADMIN_NAME` configuram o administrador local.
 - `EXPO_PUBLIC_PROVIDERS_JSON` configura prestadores adicionais.
 - `EXPO_PUBLIC_PROVIDER_ADMINS_JSON` configura administradores associados aos prestadores.
-- As variáveis `EXPO_PUBLIC_EMAILJS_*` são opcionais e habilitam a notificação de novas solicitações.
-- `EXPO_PUBLIC_SYNC_API_URL` habilita o envio automático das operações pendentes.
+- `EXPO_PUBLIC_COMPANY_EMAIL` define o destinatário dos e-mails. As variáveis `EXPO_PUBLIC_EMAILJS_*` habilitam o envio pelo EmailJS; sem elas, o app usa FormSubmit.
+- `EXPO_PUBLIC_SYNC_API_URL` habilita a fila de sincronização e o envio automático das operações pendentes.
 
 Gere o hash administrativo com:
 
@@ -200,7 +207,7 @@ para evitar a expansão de variáveis realizada pelo Expo.
 - Senhas são armazenadas com bcrypt e fator de custo 10.
 - Senhas antigas em SHA-256 com salt ou texto puro são migradas para bcrypt após o primeiro login válido.
 - Login incorreto exibe a mensagem única `Usuário ou senha inválidos`.
-- A recuperação valida o e-mail cadastrado, gera um código temporário válido por 15 minutos e envia pelo EmailJS.
+- A recuperação valida o e-mail cadastrado, gera um código temporário válido por 15 minutos e envia por EmailJS ou FormSubmit.
 - O código é invalidado após o uso e um novo pedido invalida o código anterior.
 
 ---
@@ -215,6 +222,8 @@ para evitar a expansão de variáveis realizada pelo Expo.
 6. O cliente pode avaliar o serviço concluído uma única vez, com nota de 1 a 5 e comentário.
 
 As imagens de conclusão ficam separadas das imagens anexadas na solicitação inicial.
+As fotos anexadas são armazenadas como data URI/base64 no AsyncStorage para que
+continuem visíveis no painel administrativo depois da troca de perfil ou recarga.
 
 ---
 
@@ -236,8 +245,8 @@ O sistema registra forma e status do pagamento. Pagamentos em dinheiro são marc
 - Prestadores possuem entidade própria com identificador, nome, tipo e estado ativo.
 - O cliente seleciona o prestador na confirmação da solicitação.
 - Cada solicitação, administrador e avaliação fica associado a um `providerId`.
-- O painel administrativo mostra somente solicitações do prestador autenticado.
-- A camada de contexto bloqueia ações sobre solicitações de outro cliente ou prestador.
+- Para simplificar o uso acadêmico, o painel administrativo mostra todas as solicitações.
+- A camada de contexto bloqueia ações administrativas para usuários não administradores e ações de cliente para solicitações de outro cliente.
 - Prestadores e administradores adicionais podem ser configurados pelas variáveis descritas em `.env.example`.
 
 ---
@@ -252,13 +261,14 @@ As regras de autenticação e solicitações ficam centralizadas em services.
 | `@jardinagem_weber:users` | Lista de usuários cadastrados |
 | `@jardinagem_weber:session` | Identificador do usuário logado |
 | `@jardinagem_weber:requests` | Todas as solicitações |
-| `@jardinagem_weber:sync_queue` | Histórico de alterações locais |
+| `@jardinagem_weber:sync_queue` | Histórico de alterações locais quando `EXPO_PUBLIC_SYNC_API_URL` está configurado |
 | `@jardinagem_weber:providers` | Prestadores cadastrados |
 
-O `SyncContext` utiliza NetInfo para identificar conexão e reconexão. Ao reconectar ou
-receber uma nova operação enquanto conectado, o `SyncService` tenta enviar a fila para
-`EXPO_PUBLIC_SYNC_API_URL/sync`. Operações concluídas são removidas; falhas registram
-quantidade de tentativas e último erro.
+O `SyncContext` utiliza NetInfo para identificar conexão e reconexão. Quando
+`EXPO_PUBLIC_SYNC_API_URL` está configurado, alterações locais entram na fila e o
+`SyncService` tenta enviá-las para `EXPO_PUBLIC_SYNC_API_URL/sync`. Operações
+concluídas são removidas; falhas registram quantidade de tentativas e último erro.
+Sem URL de sincronização, as alterações ficam somente no AsyncStorage local.
 
 Repositories emitem eventos internos após alterações. Dessa forma, dashboards, listas
 e detalhes são atualizados imediatamente sem depender de navegação ou recarga manual.
@@ -307,11 +317,15 @@ npx expo start --android
 
 ---
 
-## API Externa — EmailJS
+## API Externa — E-mail
 
-O app integra com a API do **EmailJS** para envio de notificações por e-mail.
+O app integra com **EmailJS** para envio de notificações por e-mail. Se as
+chaves do EmailJS não estiverem configuradas, usa **FormSubmit** via AJAX como
+fallback, sem abrir nova guia.
 
-**Quando é disparado:** ao cliente confirmar uma solicitação de orçamento.
+**Quando é disparado:**
+- Ao cliente confirmar uma solicitação de orçamento.
+- Ao cliente pedir recuperação de senha.
 
 **Dados enviados no e-mail:**
 - Nome e contato do cliente
@@ -321,9 +335,48 @@ O app integra com a API do **EmailJS** para envio de notificações por e-mail.
 - Observações
 - Quantidade de fotos anexadas
 
-**Configuração:** utilize as variáveis `EXPO_PUBLIC_EMAILJS_PUBLIC_KEY`,
-`EXPO_PUBLIC_EMAILJS_SERVICE_ID`, `EXPO_PUBLIC_EMAILJS_TEMPLATE_ID` e
-`EXPO_PUBLIC_EMAILJS_RESET_TEMPLATE_ID`.
+**Configuração:** defina `EXPO_PUBLIC_COMPANY_EMAIL` com um e-mail real.
+Opcionalmente, utilize `EXPO_PUBLIC_EMAILJS_PUBLIC_KEY`,
+`EXPO_PUBLIC_EMAILJS_SERVICE_ID`, `EXPO_PUBLIC_EMAILJS_TEMPLATE_ID`,
+`EXPO_PUBLIC_EMAILJS_RESET_TEMPLATE_ID` e `EXPO_PUBLIC_COMPANY_NAME`.
+
+Na primeira submissão feita pelo FormSubmit, o destinatário pode receber um
+e-mail de ativação. Depois da confirmação, os próximos envios chegam direto.
+
+### Templates do EmailJS
+
+Crie um serviço de e-mail no EmailJS e dois templates:
+
+1. Template de nova solicitação, informado em `EXPO_PUBLIC_EMAILJS_TEMPLATE_ID`.
+2. Template de recuperação de senha, informado em `EXPO_PUBLIC_EMAILJS_RESET_TEMPLATE_ID`.
+
+No template de nova solicitação, configure o destinatário como `{{to_email}}` e use as variáveis:
+
+```text
+to_email
+to_name
+service_name
+client_name
+client_email
+client_phone
+scheduled_date
+scheduled_time
+address
+observations
+photos_count
+provider_name
+```
+
+No template de recuperação de senha, configure o destinatário como `{{to_email}}` e use as variáveis:
+
+```text
+to_email
+to_name
+reset_code
+expires_in_minutes
+```
+
+Depois de alterar o `.env`, reinicie o Expo para as variáveis públicas serem carregadas.
 
 ---
 
@@ -334,6 +387,7 @@ npm install
 npx expo-doctor
 npx expo export --platform web
 npm run dead-code
+npm run dead-deps
 npm audit
 npm run lint
 npm run start

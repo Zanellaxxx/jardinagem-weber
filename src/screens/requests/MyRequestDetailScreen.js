@@ -141,7 +141,7 @@ export default function MyRequestDetailScreen({ route, navigation }) {
 }
 
 function PhotoCard({ label, photos }) {
-  return <View style={styles.card}><Text style={styles.label}>{label}</Text><ScrollView horizontal>{photos.map((uri) => <Image key={uri} source={{ uri }} style={styles.photo} />)}</ScrollView></View>;
+  return <View style={styles.card}><Text style={styles.label}>{label}</Text><ScrollView horizontal>{photos.map((uri, index) => <Image key={`${index}-${uri.slice(0, 24)}`} source={{ uri }} style={styles.photo} />)}</ScrollView></View>;
 }
 
 const styles = StyleSheet.create({

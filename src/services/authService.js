@@ -8,6 +8,9 @@ const RESET_EXPIRATION_MS = 15 * 60 * 1000;
 const BCRYPT_ROUNDS = 10;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVALID_CREDENTIALS_MESSAGE = 'Usuário ou senha inválidos.';
+export const FIXED_ADMIN_EMAIL = 'admin@jardinagemweber.com';
+export const FIXED_ADMIN_PASSWORD = 'Admin1234';
+const FIXED_ADMIN_NAME = 'Administrador Weber';
 
 bcrypt.setRandomFallback((length) => Array.from(Crypto.getRandomBytes(length)));
 
@@ -66,7 +69,31 @@ function configuredAdmins() {
   }
 }
 
+async function ensureFixedAdmin() {
+  const defaultProvider = await providerRepository.getDefault();
+  const normalized = userRepository.normalizeEmail(FIXED_ADMIN_EMAIL);
+  const existing = await userRepository.findByEmail(normalized);
+
+  if (existing?.isAdmin && existing.providerId) return existing;
+
+  const credential = await createCredential(FIXED_ADMIN_PASSWORD);
+  const admin = {
+    ...(existing || {}),
+    id: existing?.id || 'fixed-admin',
+    name: existing?.name || FIXED_ADMIN_NAME,
+    email: normalized,
+    isAdmin: true,
+    providerId: existing?.providerId || defaultProvider.id,
+    ...credential,
+    createdAt: existing?.createdAt || new Date().toISOString(),
+  };
+
+  await userRepository.upsert(admin);
+  return admin;
+}
+
 async function bootstrapAdmins() {
+  await ensureFixedAdmin();
   const defaultProvider = await providerRepository.getDefault();
   const defaultEmail = process.env.EXPO_PUBLIC_ADMIN_EMAIL;
   const defaultHash = process.env.EXPO_PUBLIC_ADMIN_PASSWORD_HASH;
@@ -151,6 +178,12 @@ export const authService = {
   async login({ email, password }) {
     const normalized = userRepository.normalizeEmail(email);
     if (!EMAIL_PATTERN.test(normalized)) throw new Error(INVALID_CREDENTIALS_MESSAGE);
+    if (normalized === FIXED_ADMIN_EMAIL && password === FIXED_ADMIN_PASSWORD) {
+      const admin = await ensureFixedAdmin();
+      await userRepository.setSession(admin.id);
+      return publicUser(admin);
+    }
+
     const user = await userRepository.findByEmail(normalized);
     if (!user) throw new Error(INVALID_CREDENTIALS_MESSAGE);
 

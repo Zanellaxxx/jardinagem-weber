@@ -14,6 +14,7 @@ import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Colors from '../../constants/colors';
+import { FIXED_ADMIN_EMAIL, FIXED_ADMIN_PASSWORD } from '../../services/authService';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
@@ -45,6 +46,13 @@ export default function LoginScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function fillAdminLogin() {
+    setEmail(FIXED_ADMIN_EMAIL);
+    setPassword(FIXED_ADMIN_PASSWORD);
+    setErrors({});
+    setLoginError('');
   }
 
   return (
@@ -102,6 +110,10 @@ export default function LoginScreen({ navigation }) {
               loading={loading}
               style={styles.loginButton}
             />
+
+            <TouchableOpacity onPress={fillAdminLogin} style={styles.adminShortcut}>
+              <Text style={styles.registerLink}>Usar login de administrador</Text>
+            </TouchableOpacity>
 
             <View style={styles.registerRow}>
               <Text style={styles.registerText}>Não tem conta? </Text>
@@ -167,6 +179,10 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     marginTop: 8,
+  },
+  adminShortcut: {
+    alignItems: 'center',
+    marginTop: 14,
   },
   forgotButton: { alignSelf: 'flex-end', marginTop: -6, marginBottom: 10 },
   loginError: {

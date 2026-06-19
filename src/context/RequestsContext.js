@@ -50,7 +50,10 @@ export function RequestsProvider({ children }) {
   }, [user]);
 
   const updateRequest = useCallback(async (id, changes) => {
-    await requestRepository.update(id, changes);
+    const updated = await requestRepository.update(id, changes);
+    const normalized = updated.map(normalizeRequest);
+    setRequests(normalized);
+    return normalized.find((request) => request.id === id);
   }, []);
 
   const runAuthorizedAction = useCallback(async (id, authorize, action, ...args) => {
@@ -58,13 +61,13 @@ export function RequestsProvider({ children }) {
     const request = current.find((item) => item.id === id);
     if (!request) throw new Error('Solicitação não encontrada.');
     if (!authorize(request)) throw new Error('Você não tem permissão para alterar esta solicitação.');
-    await updateRequest(id, action(request, ...args));
+    return updateRequest(id, action(request, ...args));
   }, [updateRequest]);
 
   const runAdminAction = useCallback(
     (id, action, ...args) => runAuthorizedAction(
       id,
-      (request) => Boolean(user?.isAdmin && request.providerId === user.providerId),
+      () => Boolean(user?.isAdmin),
       action,
       ...args,
     ),

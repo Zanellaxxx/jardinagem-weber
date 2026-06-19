@@ -20,9 +20,11 @@ export default function RegisterScreen({ navigation }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [successMessage, setSuccessMessage] = useState('');
 
   function update(field, value) {
     setForm(prev => ({ ...prev, [field]: value }));
+    setSuccessMessage('');
   }
 
   function validate() {
@@ -45,6 +47,7 @@ export default function RegisterScreen({ navigation }) {
   async function handleRegister() {
     if (!validate()) return;
     setLoading(true);
+    setSuccessMessage('');
     try {
       await register({
         name: form.name.trim(),
@@ -52,6 +55,8 @@ export default function RegisterScreen({ navigation }) {
         phone: form.phone.trim(),
         password: form.password,
       });
+      setSuccessMessage('Conta criada com sucesso. Você já está conectado.');
+      Alert.alert('Conta criada', 'Seu cadastro foi realizado com sucesso.');
     } catch (err) {
       Alert.alert('Erro ao cadastrar', err.message);
     } finally {
@@ -118,6 +123,8 @@ export default function RegisterScreen({ navigation }) {
               error={errors.confirm}
             />
 
+            {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
+
             <Button
               title="Criar conta"
               onPress={handleRegister}
@@ -159,6 +166,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   registerButton: { marginTop: 8 },
+  successText: {
+    color: Colors.success,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
   loginRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
   loginText: { color: Colors.textLight, fontSize: 14 },
   loginLink: { color: Colors.primary, fontSize: 14, fontWeight: '600' },

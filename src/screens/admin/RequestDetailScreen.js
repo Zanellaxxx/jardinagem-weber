@@ -13,6 +13,14 @@ function money(value) {
   return value == null ? '-' : `R$ ${Number(value).toFixed(2).replace('.', ',')}`;
 }
 
+function photoUriFromAsset(asset) {
+  if (asset.base64) {
+    return `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+  }
+
+  return asset.uri;
+}
+
 export default function RequestDetailScreen({ route, navigation }) {
   const {
     requests, sendQuote, confirmRequest, startRequest,
@@ -24,6 +32,7 @@ export default function RequestDetailScreen({ route, navigation }) {
   const [description, setDescription] = useState(request?.adminResponse || '');
   const [completionPhotos, setCompletionPhotos] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [feedback, setFeedback] = useState(null);
 
   if (!request) return <SafeAreaView style={styles.safe}><Text style={styles.empty}>Solicitação não encontrada.</Text></SafeAreaView>;
 
@@ -32,11 +41,47 @@ export default function RequestDetailScreen({ route, navigation }) {
 
   async function run(action, success) {
     setLoading(true);
+    setFeedback(null);
     try {
       await action();
+      setFeedback({ type: 'success', message: success });
       Alert.alert('Concluído', success);
     } catch (error) {
-      Alert.alert('Atenção', error.message);
+      const message = error.message || 'Não foi possível concluir a ação.';
+      setFeedback({ type: 'error', message });
+      Alert.alert('Atenção', message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSendQuote() {
+    const value = quotedValue.trim();
+    const quoteDescription = description.trim();
+
+    if (!value) {
+      Alert.alert('Atenção', 'Informe o valor do orçamento.');
+      return;
+    }
+
+    if (quoteDescription.length < 15) {
+      Alert.alert('Atenção', 'Descreva o serviço com pelo menos 15 caracteres.');
+      return;
+    }
+
+    setLoading(true);
+    setFeedback(null);
+    try {
+      const updatedRequest = await sendQuote(id, value, quoteDescription);
+      if (updatedRequest?.status !== REQUEST_STATUS.QUOTED) {
+        throw new Error('O orçamento foi salvo, mas o status não foi atualizado.');
+      }
+
+      navigation.navigate('AdminScreen');
+    } catch (error) {
+      const message = error.message || 'Não foi possível enviar o orçamento.';
+      setFeedback({ type: 'error', message });
+      Alert.alert('Atenção', message);
     } finally {
       setLoading(false);
     }
@@ -45,8 +90,10 @@ export default function RequestDetailScreen({ route, navigation }) {
   async function pickCompletionPhoto() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) return Alert.alert('Permissão necessária', 'Permita o acesso à galeria.');
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
-    if (!result.canceled && result.assets?.[0]) setCompletionPhotos((current) => [...current, result.assets[0].uri]);
+    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7, base64: true });
+    if (!result.canceled && result.assets?.[0]) {
+      setCompletionPhotos((current) => [...current, photoUriFromAsset(result.assets[0])]);
+    }
   }
 
   return (
@@ -54,6 +101,11 @@ export default function RequestDetailScreen({ route, navigation }) {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.back}>Voltar</Text></TouchableOpacity>
         <View style={styles.titleRow}><Text style={styles.title}>Solicitação</Text><StatusBadge status={request.status} /></View>
+        {feedback && (
+          <View style={[styles.feedback, feedback.type === 'error' && styles.feedbackError]}>
+            <Text style={[styles.feedbackText, feedback.type === 'error' && styles.feedbackTextError]}>{feedback.message}</Text>
+          </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.label}>Serviço e cliente</Text>
@@ -96,7 +148,7 @@ export default function RequestDetailScreen({ route, navigation }) {
             <Text style={styles.label}>Enviar orçamento</Text>
             <TextInput style={styles.input} value={quotedValue} onChangeText={setQuotedValue} placeholder="Valor em reais" keyboardType="decimal-pad" />
             <TextInput style={[styles.input, styles.area]} value={description} onChangeText={setDescription} placeholder="Descrição detalhada obrigatória" multiline />
-            <Button title="Enviar orçamento" onPress={() => run(() => sendQuote(id, quotedValue, description), 'Orçamento enviado ao cliente.')} loading={loading} />
+            <Button title="Enviar orçamento" onPress={handleSendQuote} loading={loading} />
             <Button title="Recusar solicitação" variant="outline" onPress={() => run(() => rejectRequest(id), 'Solicitação recusada.')} style={styles.action} />
           </View>
         )}
@@ -130,7 +182,7 @@ export default function RequestDetailScreen({ route, navigation }) {
 }
 
 function PhotoStrip({ photos }) {
-  return <ScrollView horizontal>{photos.map((uri) => <Image key={uri} source={{ uri }} style={styles.photo} />)}</ScrollView>;
+  return <ScrollView horizontal>{photos.map((uri, index) => <Image key={`${index}-${uri.slice(0, 24)}`} source={{ uri }} style={styles.photo} />)}</ScrollView>;
 }
 function PhotoCard({ label, photos }) {
   return <View style={styles.card}><Text style={styles.label}>{label}</Text><PhotoStrip photos={photos} /></View>;
@@ -154,6 +206,10 @@ const styles = StyleSheet.create({
   area: { minHeight: 90, textAlignVertical: 'top' },
   action: { marginTop: 6 },
   photo: { width: 88, height: 88, borderRadius: 8, marginRight: 8 },
+  feedback: { backgroundColor: '#E8F5E9', borderRadius: 10, padding: 14 },
+  feedbackError: { backgroundColor: '#FFEBEE' },
+  feedbackText: { color: Colors.success, fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  feedbackTextError: { color: Colors.error },
   notice: { backgroundColor: '#E3F2FD', borderRadius: 10, padding: 14 },
   empty: { padding: 30, color: Colors.textMedium },
 });

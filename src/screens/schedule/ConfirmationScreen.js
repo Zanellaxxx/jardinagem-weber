@@ -9,16 +9,13 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { send as sendEmail } from '@emailjs/react-native';
 import Button from '../../components/Button';
 import Colors from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { useRequests } from '../../context/RequestsContext';
 import { providerRepository } from '../../repositories/providerRepository';
 import { DEFAULT_PROVIDER } from '../../constants/providers';
-
-const EMAILJS_SERVICE_ID = process.env.EXPO_PUBLIC_EMAILJS_SERVICE_ID;
-const EMAILJS_TEMPLATE_ID = process.env.EXPO_PUBLIC_EMAILJS_TEMPLATE_ID;
+import { emailService } from '../../services/emailService';
 
 export default function ConfirmationScreen({ route, navigation }) {
   const { service, scheduledDate, observations, address, photos } = route.params;
@@ -66,6 +63,7 @@ export default function ConfirmationScreen({ route, navigation }) {
     }
     setLoading(true);
     try {
+      const selectedProvider = providers.find((provider) => provider.id === providerId);
       await addRequest({
         serviceId: service.id,
         serviceName: service.name,
@@ -80,27 +78,31 @@ export default function ConfirmationScreen({ route, navigation }) {
         providerId,
       });
 
-      // Envia e-mail de notificação para a empresa (não bloqueia se falhar)
+      let emailResult = null;
+      let emailError = null;
       try {
-        if (EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID) await sendEmail(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-          service_name: service.name,
-          client_name: user.name,
-          client_email: user.email,
-          client_phone: user.phone || 'Não informado',
-          scheduled_date: date.toLocaleDateString('pt-BR', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-          }),
-          scheduled_time: date.toLocaleTimeString('pt-BR', {
-            hour: '2-digit', minute: '2-digit',
-          }),
-          address: fullAddress,
-          observations: observations.trim() || 'Nenhuma',
-          photos_count: photos.length.toString(),
+        emailResult = await emailService.sendNewRequestNotification({
+          service,
+          user,
+          scheduledDate,
+          observations,
+          address,
+          photos,
+          providerName: selectedProvider?.name,
         });
-      } catch {}
+      } catch (error) {
+        emailError = error;
+      }
+
+      const emailSent = Boolean(emailResult);
 
       navigation.navigate('MyRequestsScreen');
-      Alert.alert('Solicitação enviada!', 'Recebemos seu pedido de orçamento.');
+      Alert.alert(
+        'Solicitação enviada!',
+        emailSent
+          ? 'Recebemos seu pedido de orçamento e enviamos a notificação por e-mail.'
+          : `Recebemos seu pedido, mas o e-mail não foi enviado. ${emailError?.message || 'Verifique a configuração de e-mail.'}`,
+      );
     } catch (error) {
       Alert.alert('Não foi possível enviar', error.message || 'Tente novamente.');
     } finally {

@@ -16,6 +16,14 @@ import Colors from '../../constants/colors';
 
 const MAX_PHOTOS = 5;
 
+function photoUriFromAsset(asset) {
+  if (asset.base64) {
+    return `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+  }
+
+  return asset.uri;
+}
+
 export default function PhotosScreen({ route, navigation }) {
   const { service, scheduledDate, observations, address } = route.params;
   const [photos, setPhotos] = useState([]);
@@ -41,11 +49,11 @@ export default function PhotosScreen({ route, navigation }) {
     }
 
     const result = fromCamera
-      ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
-      : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, allowsMultipleSelection: false });
+      ? await ImagePicker.launchCameraAsync({ quality: 0.7, base64: true })
+      : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, base64: true, allowsMultipleSelection: false });
 
     if (!result.canceled && result.assets?.length > 0) {
-      setPhotos((prev) => [...prev, result.assets[0].uri]);
+      setPhotos((prev) => [...prev, photoUriFromAsset(result.assets[0])]);
     }
   }
 
@@ -96,7 +104,7 @@ export default function PhotosScreen({ route, navigation }) {
         {photos.length > 0 && (
           <FlatList
             data={photos}
-            keyExtractor={(item) => item}
+            keyExtractor={(item, index) => `${index}-${item.slice(0, 24)}`}
             numColumns={2}
             scrollEnabled={false}
             columnWrapperStyle={styles.photoRow}
